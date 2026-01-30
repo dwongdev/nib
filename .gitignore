@@ -44,8 +44,9 @@ secrets/
 # Suricata downloaded rules
 suricata/rules/suricata.rules
 
-# Generated config (privacy mode)
+# Generated configs (selected at install based on PRIVACY_MODE)
 suricata/config/active-suricata.yaml
+storage/active-vector.yaml
 
 # Test outputs
 coverage/

@@ -301,22 +301,25 @@ else
 fi
 
 # ── Privacy mode config consistency ──
-if [ -f "$NIB_DIR/suricata/config/active-suricata.yaml" ]; then
+# Privacy mode is enforced at Vector (log shipping) level, not Suricata.
+# Suricata always logs everything (CrowdSec needs the full EVE stream).
+# Vector selectively ships events to storage based on PRIVACY_MODE.
+if [ -f "$NIB_DIR/storage/active-vector.yaml" ]; then
   if [ "$PRIVACY_MODE" = "alerts-only" ]; then
-    if grep -q '# Privacy Mode: alerts-only' "$NIB_DIR/suricata/config/active-suricata.yaml"; then
-      record pass "runtime" "privacy config" "active config matches PRIVACY_MODE=alerts-only"
+    if grep -q 'Privacy Mode: alerts-only' "$NIB_DIR/storage/active-vector.yaml"; then
+      record pass "runtime" "privacy config" "Vector config matches PRIVACY_MODE=alerts-only"
     else
-      record fail "runtime" "privacy config" "PRIVACY_MODE=alerts-only but active config is full — run make install-suricata"
+      record fail "runtime" "privacy config" "PRIVACY_MODE=alerts-only but Vector uses full config — run make install-storage"
     fi
   else
-    if grep -q '# Privacy Mode: alerts-only' "$NIB_DIR/suricata/config/active-suricata.yaml"; then
-      record fail "runtime" "privacy config" "PRIVACY_MODE=full but active config is alerts-only — run make install-suricata"
+    if grep -q 'Privacy Mode: alerts-only' "$NIB_DIR/storage/active-vector.yaml"; then
+      record fail "runtime" "privacy config" "PRIVACY_MODE=full but Vector uses privacy config — run make install-storage"
     else
-      record pass "runtime" "privacy config" "active config matches PRIVACY_MODE=full"
+      record pass "runtime" "privacy config" "Vector config matches PRIVACY_MODE=full"
     fi
   fi
 else
-  record skip "runtime" "privacy config" "active-suricata.yaml not found (run make install-suricata)"
+  record skip "runtime" "privacy config" "active-vector.yaml not found (run make install-storage)"
 fi
 
 # ═════════════════════════════════════════════════════════════════════════════

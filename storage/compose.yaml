@@ -42,7 +42,7 @@ services:
     tmpfs:
       - /tmp
     volumes:
-      - ./vector.yaml:/etc/vector/vector.yaml:ro
+      - ./active-vector.yaml:/etc/vector/vector.yaml:ro
       - suricata-logs:/var/log/suricata:ro
       - vector-data:/var/lib/vector
     networks:

@@ -58,14 +58,7 @@ install: network ## Install all stacks (Suricata + CrowdSec + Storage + Grafana)
 
 install-suricata: network ## Install Suricata IDS
 	@echo "$(CYAN)Installing Suricata IDS...$(RESET)"
-	@set -a; . ./.env 2>/dev/null || true; set +a; \
-	PMODE=$${PRIVACY_MODE:-full}; \
-	if [ "$$PMODE" = "alerts-only" ]; then \
-		echo "$(YELLOW)  Privacy mode: alerts-only (no DNS/HTTP/TLS metadata logging)$(RESET)"; \
-		cp suricata/config/suricata-privacy.yaml suricata/config/active-suricata.yaml; \
-	else \
-		cp suricata/config/suricata.yaml suricata/config/active-suricata.yaml; \
-	fi
+	@cp suricata/config/suricata.yaml suricata/config/active-suricata.yaml
 	@$(MAKE) --no-print-directory update-rules
 	@$(DOCKER_COMPOSE) -f suricata/compose.yaml up -d
 	@echo "$(GREEN)✓ Suricata installed$(RESET)"
@@ -104,6 +97,17 @@ install-crowdsec: network ## Install CrowdSec (local bouncer or sensor mode via 
 
 install-storage: network ## Install VictoriaLogs + Vector log shipper
 	@echo "$(CYAN)Installing storage stack...$(RESET)"
+	@set -a; . ./.env 2>/dev/null || true; set +a; \
+	PMODE=$${PRIVACY_MODE:-full}; \
+	if [ "$$PMODE" = "alerts-only" ]; then \
+		echo "$(YELLOW)  Privacy mode: alerts-only$(RESET)"; \
+		echo "  Only IDS alerts + stats shipped to storage (DNS/HTTP/TLS/flow dropped)"; \
+		echo "  App-layer fields stripped from alert events"; \
+		echo "  $(YELLOW)Dashboards affected: DNS Analysis (empty), TLS & Fingerprints (empty)$(RESET)"; \
+		cp storage/vector-privacy.yaml storage/active-vector.yaml; \
+	else \
+		cp storage/vector.yaml storage/active-vector.yaml; \
+	fi
 	@$(DOCKER_COMPOSE) -f storage/compose.yaml up -d
 	@echo "$(GREEN)✓ Storage installed$(RESET)"
 

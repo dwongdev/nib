@@ -395,11 +395,25 @@ make audit
 
 ### Privacy Mode
 
-By default, NIB logs full protocol metadata (DNS queries, HTTP URLs, TLS SNI). Set `PRIVACY_MODE=alerts-only` in `.env` to only log IDS alerts:
+By default, NIB ships full protocol metadata to storage (DNS queries, HTTP URLs, TLS SNI, flow records). Set `PRIVACY_MODE=alerts-only` in `.env` to restrict what reaches dashboards:
 
 ```bash
 PRIVACY_MODE=alerts-only
 ```
+
+**What `alerts-only` does:**
+- Only `alert` and `stats` events are shipped to VictoriaLogs (DNS, HTTP, TLS, flow events are dropped at the Vector level)
+- Alert events keep: 5-tuple (src/dst IP + port, protocol), timestamp, signature ID/name, severity, action, community ID
+- Alert events strip: app-layer fields (`http.*`, `tls.*`, `dns.*`), payload, packet data, alert metadata
+- Suricata still logs everything to EVE JSON (CrowdSec needs the full stream for behavioral detection)
+
+**Dashboard impact:**
+| Dashboard | Status |
+|-----------|--------|
+| Network Security Overview | Works (uses alert data) |
+| CrowdSec Decisions | Works (uses alert + stats) |
+| DNS Analysis | **Empty** (dns events not shipped) |
+| TLS & Fingerprints | **Empty** (tls events not shipped) |
 
 ## Troubleshooting
 

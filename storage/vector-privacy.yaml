@@ -1,0 +1,140 @@
+# NIB - Vector Log Shipper Configuration (Privacy Mode: alerts-only)
+#
+# CONTRACT:
+# - Only event_type=alert and event_type=stats are shipped to storage
+# - All other event types (dns, http, tls, flow, fileinfo, etc.) are dropped
+# - Alert events keep: 5-tuple (src_ip, dest_ip, src_port, dest_port, proto),
+#   timestamp, signature ID/name, severity, category, action, community_id
+# - Alert events DROP: app-layer fields (alert.metadata.*, http.*, tls.*,
+#   dns.*, payload, payload_printable, packet)
+#
+# NOTE: Suricata still logs ALL event types to EVE JSON (CrowdSec needs the
+# full stream for behavioral detection). This config only controls what
+# reaches VictoriaLogs/Grafana.
+#
+# DASHBOARD IMPACT:
+# - Network Security Overview: WORKS (uses alert data only)
+# - DNS Analysis: EMPTY (dns events not shipped)
+# - TLS & Fingerprints: EMPTY (tls events not shipped)
+# - CrowdSec Decisions: WORKS (uses alert + stats data)
+
+data_dir: /var/lib/vector
+
+sources:
+  suricata_eve:
+    type: file
+    include:
+      - /var/log/suricata/eve.json
+    read_from: beginning
+    fingerprint:
+      strategy: device_and_inode
+
+transforms:
+  parse_eve:
+    type: remap
+    inputs:
+      - suricata_eve
+    source: |
+      . = parse_json!(.message)
+      .source = "suricata"
+      .event_type = .event_type ?? "unknown"
+
+      # Normalize timestamp
+      .timestamp = .timestamp ?? now()
+
+      # Extract key fields for labeling
+      if .event_type == "alert" {
+        .severity = to_string(.alert.severity) ?? "3"
+        .signature = .alert.signature ?? "unknown"
+        .category = .alert.category ?? "unknown"
+        .action = .alert.action ?? "unknown"
+        .signature_id = to_string(.alert.signature_id) ?? "0"
+      }
+
+      # Add community ID as label if present
+      .community_id = .community_id ?? ""
+
+  # Privacy filter: only allow alerts and stats through
+  filter_privacy:
+    type: filter
+    inputs:
+      - parse_eve
+    condition: .event_type == "alert" || .event_type == "stats"
+
+  # Strip app-layer fields from alerts to reduce data sensitivity
+  strip_applayer:
+    type: remap
+    inputs:
+      - filter_privacy
+    source: |
+      if .event_type == "alert" {
+        # Keep: 5-tuple, timestamp, signature info, community_id
+        # Drop: app-layer metadata, payload, packet data
+        del(.http)
+        del(.tls)
+        del(.dns)
+        del(.app_proto_orig)
+        del(.smtp)
+        del(.ssh)
+        del(.smb)
+        del(.nfs)
+        del(.ftp)
+        del(.ftp_data)
+        del(.pgsql)
+        del(.dcerpc)
+        del(.ikev2)
+        del(.krb5)
+        del(.mqtt)
+        del(.rfb)
+        del(.snmp)
+        del(.dhcp)
+        del(.sip)
+        del(.payload)
+        del(.payload_printable)
+        del(.packet)
+        del(.packet_info)
+
+        # Strip verbose metadata from alert sub-object but keep core fields
+        if exists(.alert.metadata) {
+          del(.alert.metadata)
+        }
+      }
+
+  route_events:
+    type: route
+    inputs:
+      - strip_applayer
+    route:
+      alerts: .event_type == "alert"
+      stats: .event_type == "stats"
+
+sinks:
+  victorialogs_alerts:
+    type: elasticsearch
+    inputs:
+      - route_events.alerts
+    endpoints:
+      - http://nib-victorialogs:9428/insert/elasticsearch/
+    mode: bulk
+    api_version: v8
+    query:
+      _stream_fields: source,event_type,category,action
+      _msg_field: signature
+      _time_field: timestamp
+    healthcheck:
+      enabled: false
+
+  victorialogs_stats:
+    type: elasticsearch
+    inputs:
+      - route_events.stats
+    endpoints:
+      - http://nib-victorialogs:9428/insert/elasticsearch/
+    mode: bulk
+    api_version: v8
+    query:
+      _stream_fields: source,event_type
+      _msg_field: message
+      _time_field: timestamp
+    healthcheck:
+      enabled: false
