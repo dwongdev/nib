@@ -5,7 +5,7 @@ Thanks for your interest in contributing to Network in a Box.
 ## Getting Started
 
 1. Fork the repository
-2. Clone your fork: `git clone https://github.com/yourusername/nib.git`
+2. Clone your fork: `git clone https://github.com/matijazezelj/nib.git`
 3. Create a branch: `git checkout -b feature/your-feature`
 4. Make your changes
 5. Test: `make validate && make install && make health`

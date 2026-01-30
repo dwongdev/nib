@@ -5,8 +5,8 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 Part of the **in-a-Box** family:
-- [**SIB**](https://github.com/yourusername/sib) - SIEM in a Box (runtime security with Falco)
-- [**OIB**](https://github.com/yourusername/oib) - Observability in a Box
+- [**SIB**](https://github.com/matijazezelj/sib) - SIEM in a Box (runtime security with Falco)
+- [**OIB**](https://github.com/matijazezelj/oib) - Observability in a Box
 - **NIB** - Network in a Box (this project)
 
 ## Features
@@ -67,7 +67,7 @@ Part of the **in-a-Box** family:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/nib.git
+git clone https://github.com/matijazezelj/nib.git
 cd nib
 
 # Install everything
@@ -230,6 +230,108 @@ nib/
 | Dashboards | Grafana | Kibana | Custom | - |
 | Resource usage | Low (~1GB) | High (8GB+) | Medium | Low |
 | Docker-native | Yes | Partial | Yes | Partial |
+
+## How It Works
+
+### Data Flow
+
+Suricata runs in Docker with `network_mode: host`, giving it direct access to the host's network interfaces via AF_PACKET (zero-copy kernel capture). It inspects every packet and writes structured JSON events to a shared Docker volume:
+
+```
+Network packets on eth0
+    │
+    ▼
+Suricata (AF_PACKET, host network) ──→ /var/log/suricata/eve.json (Docker volume)
+                                                │
+                                 ┌──────────────┼──────────────┐
+                                 ▼              ▼              ▼
+                           CrowdSec        Vector          fast.log
+                           reads EVE       reads EVE       (plain text
+                           for attack      for shipping     alert log)
+                           patterns        to storage
+                                │              │
+                                ▼              ▼
+                           Firewall       VictoriaLogs ──→ Grafana
+                           Bouncer        (query engine)   (dashboards)
+                           (iptables
+                            DROP)
+```
+
+Both CrowdSec and Vector read from the same Docker volume. CrowdSec detects attack patterns (brute force, scans, exploit attempts) and instructs the firewall bouncer to add iptables DROP rules. The bouncer also runs in `network_mode: host` so it directly manipulates the host's iptables.
+
+### Where to Deploy
+
+The key constraint: **Suricata needs to see the traffic**, and **the bouncer needs iptables on a machine where blocking matters**.
+
+#### 1. Linux Router / Gateway (best coverage)
+
+If you have a Linux box as your network gateway, this is the ideal placement. Suricata sees all traffic entering and leaving your network, and iptables blocks happen before packets reach internal hosts.
+
+```
+Internet ──→ [NIB on Linux Router] ──→ Internal Network
+              Suricata sees ALL        Blocked IPs never
+              inbound + outbound       reach internal hosts
+```
+
+Works with: a dedicated Linux box, a repurposed PC running Debian/Ubuntu, or any Linux-based firewall.
+
+#### 2. Port Mirror / SPAN (dedicated sensor)
+
+If your router isn't Linux (or you don't want to modify it), configure a SPAN/mirror port on your managed switch to copy all traffic to a dedicated NIB host. Suricata sees everything, but the iptables bouncer only blocks on the NIB host itself.
+
+```
+Switch (SPAN port) ──mirror──→ [NIB Sensor]
+                                Suricata sees all traffic
+                                Bouncer blocks on sensor only
+```
+
+To block on your actual firewall, swap the iptables bouncer for one that talks to your firewall's API. CrowdSec provides ready-made bouncers for:
+- **pfSense** / **OPNsense** - REST API bouncer
+- **Cloudflare** - Edge blocking
+- **nginx** / **HAProxy** - Reverse proxy blocking
+- **AWS WAF** / **GCP** - Cloud firewall
+
+#### 3. Individual Server (protect one host)
+
+Run NIB on any Linux server to monitor and protect that specific machine. Suricata only sees traffic to/from that host, but iptables blocking is fully effective since it's on the same machine.
+
+```
+Internet ──→ [Web Server with NIB]
+              Suricata monitors this host's traffic
+              Bouncer blocks attackers at iptables
+```
+
+Good for: web servers, API servers, bastion hosts, any internet-facing Linux box.
+
+#### 4. Alongside SIB (defense in depth)
+
+Run both on the same host for complementary coverage:
+
+```
+[Host running SIB + NIB]
+  SIB (Falco)  → watches syscalls: file access, process execution, container activity
+  NIB (Suricata) → watches network: traffic patterns, DNS, TLS, protocol anomalies
+```
+
+They don't share anything — separate Docker networks (`sib-network` vs `nib-network`), separate storage, separate Grafana instances (port 3000 vs 3001). You can also point both at a single Grafana by adding the other's datasource.
+
+### Choosing a Network Interface
+
+Set `SURICATA_INTERFACE` in `.env` to the interface carrying the traffic you want to monitor:
+
+```bash
+# Find your interfaces
+ip link show
+
+# Common examples:
+SURICATA_INTERFACE=eth0       # Physical ethernet
+SURICATA_INTERFACE=ens33      # VMware / modern Linux naming
+SURICATA_INTERFACE=enp0s3     # VirtualBox
+SURICATA_INTERFACE=br0        # Bridge interface (router)
+SURICATA_INTERFACE=wlan0      # WiFi (limited - no promiscuous mode on most drivers)
+```
+
+For a router/gateway, use the **LAN-facing interface** to see internal traffic, or the **WAN-facing interface** to see external threats, or a **bridge interface** to see both.
 
 ## How It Works With SIB
 
