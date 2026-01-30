@@ -1,0 +1,144 @@
+# NIB - Vector Log Shipper Configuration
+# Reads Suricata EVE JSON and ships to VictoriaLogs
+
+data_dir: /var/lib/vector
+
+sources:
+  suricata_eve:
+    type: file
+    include:
+      - /var/log/suricata/eve.json
+    read_from: beginning
+    fingerprint:
+      strategy: device_and_inode
+
+transforms:
+  parse_eve:
+    type: remap
+    inputs:
+      - suricata_eve
+    source: |
+      . = parse_json!(.message)
+      .source = "suricata"
+      .event_type = .event_type ?? "unknown"
+
+      # Normalize timestamp
+      .timestamp = .timestamp ?? now()
+
+      # Extract key fields for labeling
+      if .event_type == "alert" {
+        .severity = to_string(.alert.severity) ?? "3"
+        .signature = .alert.signature ?? "unknown"
+        .category = .alert.category ?? "unknown"
+        .action = .alert.action ?? "unknown"
+        .signature_id = to_string(.alert.signature_id) ?? "0"
+      }
+
+      # Add community ID as label if present
+      .community_id = .community_id ?? ""
+
+  # Split alerts from other event types for different labeling
+  route_events:
+    type: route
+    inputs:
+      - parse_eve
+    route:
+      alerts: .event_type == "alert"
+      dns: .event_type == "dns"
+      tls: .event_type == "tls"
+      http: .event_type == "http"
+      flow: .event_type == "flow"
+      stats: .event_type == "stats"
+      other: .event_type != "alert" && .event_type != "dns" && .event_type != "tls" && .event_type != "http" && .event_type != "flow" && .event_type != "stats"
+
+sinks:
+  victorialogs_alerts:
+    type: elasticsearch
+    inputs:
+      - route_events.alerts
+    endpoints:
+      - http://nib-victorialogs:9428/insert/elasticsearch/
+    mode: bulk
+    api_version: v8
+    query:
+      _stream_fields: source,event_type,category,action
+      _msg_field: signature
+      _time_field: timestamp
+    healthcheck:
+      enabled: false
+
+  victorialogs_dns:
+    type: elasticsearch
+    inputs:
+      - route_events.dns
+    endpoints:
+      - http://nib-victorialogs:9428/insert/elasticsearch/
+    mode: bulk
+    api_version: v8
+    query:
+      _stream_fields: source,event_type
+      _msg_field: message
+      _time_field: timestamp
+    healthcheck:
+      enabled: false
+
+  victorialogs_tls:
+    type: elasticsearch
+    inputs:
+      - route_events.tls
+    endpoints:
+      - http://nib-victorialogs:9428/insert/elasticsearch/
+    mode: bulk
+    api_version: v8
+    query:
+      _stream_fields: source,event_type
+      _msg_field: message
+      _time_field: timestamp
+    healthcheck:
+      enabled: false
+
+  victorialogs_http:
+    type: elasticsearch
+    inputs:
+      - route_events.http
+    endpoints:
+      - http://nib-victorialogs:9428/insert/elasticsearch/
+    mode: bulk
+    api_version: v8
+    query:
+      _stream_fields: source,event_type
+      _msg_field: message
+      _time_field: timestamp
+    healthcheck:
+      enabled: false
+
+  victorialogs_flow:
+    type: elasticsearch
+    inputs:
+      - route_events.flow
+    endpoints:
+      - http://nib-victorialogs:9428/insert/elasticsearch/
+    mode: bulk
+    api_version: v8
+    query:
+      _stream_fields: source,event_type
+      _msg_field: message
+      _time_field: timestamp
+    healthcheck:
+      enabled: false
+
+  victorialogs_other:
+    type: elasticsearch
+    inputs:
+      - route_events.other
+      - route_events.stats
+    endpoints:
+      - http://nib-victorialogs:9428/insert/elasticsearch/
+    mode: bulk
+    api_version: v8
+    query:
+      _stream_fields: source,event_type
+      _msg_field: message
+      _time_field: timestamp
+    healthcheck:
+      enabled: false

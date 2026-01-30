@@ -1,0 +1,49 @@
+# Storage Stack - Log Aggregation
+# Vector ships Suricata EVE JSON and CrowdSec logs to VictoriaLogs
+
+services:
+  nib-victorialogs:
+    image: victoriametrics/victoria-logs:v1.3.1-victorialogs
+    container_name: nib-victorialogs
+    restart: unless-stopped
+    command:
+      - -storageDataPath=/data
+      - -retentionPeriod=${VICTORIALOGS_RETENTION:-168h}
+      - -httpListenAddr=:9428
+    volumes:
+      - victorialogs-data:/data
+    networks:
+      - nib-network
+    ports:
+      - "${STORAGE_BIND:-127.0.0.1}:${VICTORIALOGS_PORT:-9428}:9428"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9428/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  nib-vector:
+    image: timberio/vector:0.43.1-alpine
+    container_name: nib-vector
+    restart: unless-stopped
+    volumes:
+      - ./vector.yaml:/etc/vector/vector.yaml:ro
+      - suricata-logs:/var/log/suricata:ro
+      - vector-data:/var/lib/vector
+    networks:
+      - nib-network
+    depends_on:
+      nib-victorialogs:
+        condition: service_healthy
+
+networks:
+  nib-network:
+    external: true
+
+volumes:
+  victorialogs-data:
+  vector-data:
+  suricata-logs:
+    external: true
+    name: suricata_suricata-logs

@@ -1,0 +1,35 @@
+# Detection Stack - Suricata Network IDS
+# Inspects network traffic for threats using signature and protocol analysis
+# EVE JSON logs are shipped to storage for dashboards and alerting
+
+services:
+  nib-suricata:
+    image: jasonish/suricata:7.0
+    container_name: nib-suricata
+    restart: unless-stopped
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+      - SYS_NICE
+    volumes:
+      - ./config/suricata.yaml:/etc/suricata/suricata.yaml:ro
+      - ./rules:/etc/suricata/rules:ro
+      - suricata-logs:/var/log/suricata
+      - suricata-run:/var/run/suricata
+    environment:
+      - SURICATA_OPTIONS=${SURICATA_OPTIONS:--i ${SURICATA_INTERFACE:-eth0}}
+    command: >
+      -c /etc/suricata/suricata.yaml
+      -i ${SURICATA_INTERFACE:-eth0}
+      --set vars.address-groups.HOME_NET=${HOME_NET:-[192.168.0.0/16,10.0.0.0/8,172.16.0.0/12]}
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /var/run/suricata/suricata.pid && kill -0 $(cat /var/run/suricata/suricata.pid)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  suricata-logs:
+  suricata-run:

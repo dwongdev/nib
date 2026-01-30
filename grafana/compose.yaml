@@ -1,0 +1,35 @@
+# Visualization Stack - Grafana
+# Dashboards for Suricata alerts, network traffic, DNS, TLS, and CrowdSec decisions
+
+services:
+  nib-grafana:
+    image: grafana/grafana:11.4.0
+    container_name: nib-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_INSTALL_PLUGINS=victoriametrics-logs-datasource
+      - GF_SERVER_ROOT_URL=http://localhost:${GRAFANA_PORT:-3001}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./provisioning:/etc/grafana/provisioning:ro
+      - ./dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - nib-network
+    ports:
+      - "${GRAFANA_BIND:-0.0.0.0}:${GRAFANA_PORT:-3001}:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+networks:
+  nib-network:
+    external: true
+
+volumes:
+  grafana-data:

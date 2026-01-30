@@ -1,0 +1,164 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "Alerts Over Time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "victoriametrics-logs-datasource", "uid": "victorialogs" },
+      "targets": [
+        {
+          "expr": "_stream:{source=\"suricata\", event_type=\"alert\"} | stats by (_time:1m) count() as alerts",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "drawStyle": "bars"
+          }
+        }
+      }
+    },
+    {
+      "title": "Total Alerts",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 8 },
+      "datasource": { "type": "victoriametrics-logs-datasource", "uid": "victorialogs" },
+      "targets": [
+        {
+          "expr": "_stream:{source=\"suricata\", event_type=\"alert\"} | stats count() as total",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "red" },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 100 },
+              { "color": "red", "value": 500 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "DNS Queries",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 8 },
+      "datasource": { "type": "victoriametrics-logs-datasource", "uid": "victorialogs" },
+      "targets": [
+        {
+          "expr": "_stream:{source=\"suricata\", event_type=\"dns\"} | stats count() as total",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "TLS Connections",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 8 },
+      "datasource": { "type": "victoriametrics-logs-datasource", "uid": "victorialogs" },
+      "targets": [
+        {
+          "expr": "_stream:{source=\"suricata\", event_type=\"tls\"} | stats count() as total",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "HTTP Requests",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 8 },
+      "datasource": { "type": "victoriametrics-logs-datasource", "uid": "victorialogs" },
+      "targets": [
+        {
+          "expr": "_stream:{source=\"suricata\", event_type=\"http\"} | stats count() as total",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Top Alert Signatures",
+      "type": "table",
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "victoriametrics-logs-datasource", "uid": "victorialogs" },
+      "targets": [
+        {
+          "expr": "_stream:{source=\"suricata\", event_type=\"alert\"} | stats by (signature) count() as hits | sort by (hits) desc | limit 20",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Top Alert Categories",
+      "type": "piechart",
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "victoriametrics-logs-datasource", "uid": "victorialogs" },
+      "targets": [
+        {
+          "expr": "_stream:{source=\"suricata\", event_type=\"alert\"} | stats by (category) count() as hits | sort by (hits) desc | limit 10",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Top Source IPs (Alerts)",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 22 },
+      "datasource": { "type": "victoriametrics-logs-datasource", "uid": "victorialogs" },
+      "targets": [
+        {
+          "expr": "_stream:{source=\"suricata\", event_type=\"alert\"} | stats by (src_ip) count() as hits | sort by (hits) desc | limit 20",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Top Destination IPs (Alerts)",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 22 },
+      "datasource": { "type": "victoriametrics-logs-datasource", "uid": "victorialogs" },
+      "targets": [
+        {
+          "expr": "_stream:{source=\"suricata\", event_type=\"alert\"} | stats by (dest_ip) count() as hits | sort by (hits) desc | limit 20",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Recent Alerts",
+      "type": "table",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 30 },
+      "datasource": { "type": "victoriametrics-logs-datasource", "uid": "victorialogs" },
+      "targets": [
+        {
+          "expr": "_stream:{source=\"suricata\", event_type=\"alert\"} | sort by (_time) desc | limit 50",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["nib", "suricata", "network"],
+  "templating": { "list": [] },
+  "time": { "from": "now-24h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Network Security Overview",
+  "uid": "nib-network-overview",
+  "version": 1
+}

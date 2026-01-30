@@ -1,0 +1,87 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "DNS Queries Over Time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "victoriametrics-logs-datasource", "uid": "victorialogs" },
+      "targets": [
+        {
+          "expr": "_stream:{source=\"suricata\", event_type=\"dns\"} | stats by (_time:1m) count() as queries",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "fillOpacity": 15, "lineWidth": 2, "drawStyle": "line" }
+        }
+      }
+    },
+    {
+      "title": "Total DNS Queries",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 8 },
+      "datasource": { "type": "victoriametrics-logs-datasource", "uid": "victorialogs" },
+      "targets": [
+        { "expr": "_stream:{source=\"suricata\", event_type=\"dns\"} | stats count() as total", "refId": "A" }
+      ]
+    },
+    {
+      "title": "Unique Domains",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 8 },
+      "datasource": { "type": "victoriametrics-logs-datasource", "uid": "victorialogs" },
+      "targets": [
+        { "expr": "_stream:{source=\"suricata\", event_type=\"dns\"} | stats by (dns.query.rrname) count() as c | stats count() as unique_domains", "refId": "A" }
+      ]
+    },
+    {
+      "title": "DNS Query Types",
+      "type": "piechart",
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 8 },
+      "datasource": { "type": "victoriametrics-logs-datasource", "uid": "victorialogs" },
+      "targets": [
+        { "expr": "_stream:{source=\"suricata\", event_type=\"dns\"} | stats by (dns.query.rrtype) count() as hits | sort by (hits) desc", "refId": "A" }
+      ]
+    },
+    {
+      "title": "Top Queried Domains",
+      "type": "table",
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "victoriametrics-logs-datasource", "uid": "victorialogs" },
+      "targets": [
+        { "expr": "_stream:{source=\"suricata\", event_type=\"dns\"} | stats by (dns.query.rrname) count() as hits | sort by (hits) desc | limit 30", "refId": "A" }
+      ]
+    },
+    {
+      "title": "Top DNS Clients",
+      "type": "table",
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "victoriametrics-logs-datasource", "uid": "victorialogs" },
+      "targets": [
+        { "expr": "_stream:{source=\"suricata\", event_type=\"dns\"} | stats by (src_ip) count() as queries | sort by (queries) desc | limit 20", "refId": "A" }
+      ]
+    },
+    {
+      "title": "NXDOMAIN Responses (Potential DGA/Tunneling)",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 22 },
+      "datasource": { "type": "victoriametrics-logs-datasource", "uid": "victorialogs" },
+      "targets": [
+        { "expr": "_stream:{source=\"suricata\", event_type=\"dns\"} AND \"NXDOMAIN\" | stats by (dns.query.rrname) count() as hits | sort by (hits) desc | limit 30", "refId": "A" }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["nib", "dns", "network"],
+  "time": { "from": "now-24h", "to": "now" },
+  "title": "DNS Analysis",
+  "uid": "nib-dns-analysis",
+  "version": 1
+}

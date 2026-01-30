@@ -1,0 +1,9 @@
+# NIB - CrowdSec Acquisition Configuration
+# Defines log sources that CrowdSec monitors for attack patterns
+
+# Suricata EVE JSON alerts
+- filenames:
+    - /var/log/suricata/eve.json
+  labels:
+    type: suricata-eve
+  force_inotify: true

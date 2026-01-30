@@ -1,0 +1,73 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "TLS Connections Over Time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "victoriametrics-logs-datasource", "uid": "victorialogs" },
+      "targets": [
+        { "expr": "_stream:{source=\"suricata\", event_type=\"tls\"} | stats by (_time:1m) count() as connections", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "fillOpacity": 15, "lineWidth": 2, "drawStyle": "line" } }
+      }
+    },
+    {
+      "title": "TLS Versions",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "datasource": { "type": "victoriametrics-logs-datasource", "uid": "victorialogs" },
+      "targets": [
+        { "expr": "_stream:{source=\"suricata\", event_type=\"tls\"} | stats by (tls.version) count() as hits | sort by (hits) desc", "refId": "A" }
+      ]
+    },
+    {
+      "title": "Top JA3 Fingerprints",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 16, "x": 8, "y": 8 },
+      "datasource": { "type": "victoriametrics-logs-datasource", "uid": "victorialogs" },
+      "targets": [
+        { "expr": "_stream:{source=\"suricata\", event_type=\"tls\"} | stats by (tls.ja3.hash) count() as hits | sort by (hits) desc | limit 20", "refId": "A" }
+      ]
+    },
+    {
+      "title": "Top TLS SNI (Server Names)",
+      "type": "table",
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "victoriametrics-logs-datasource", "uid": "victorialogs" },
+      "targets": [
+        { "expr": "_stream:{source=\"suricata\", event_type=\"tls\"} | stats by (tls.sni) count() as hits | sort by (hits) desc | limit 30", "refId": "A" }
+      ]
+    },
+    {
+      "title": "Self-Signed Certificates",
+      "type": "table",
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "victoriametrics-logs-datasource", "uid": "victorialogs" },
+      "targets": [
+        { "expr": "_stream:{source=\"suricata\", event_type=\"tls\"} AND tls.issuerdn:* AND tls.subject:* | sort by (_time) desc | limit 50", "refId": "A" }
+      ]
+    },
+    {
+      "title": "Expired Certificates",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 26 },
+      "datasource": { "type": "victoriametrics-logs-datasource", "uid": "victorialogs" },
+      "targets": [
+        { "expr": "_stream:{source=\"suricata\", event_type=\"tls\"} AND \"certificate has expired\" | sort by (_time) desc | limit 30", "refId": "A" }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["nib", "tls", "network"],
+  "time": { "from": "now-24h", "to": "now" },
+  "title": "TLS & Fingerprints",
+  "uid": "nib-tls-fingerprints",
+  "version": 1
+}

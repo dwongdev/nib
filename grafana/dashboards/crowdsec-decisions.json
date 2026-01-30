@@ -1,0 +1,82 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "CrowdSec Decisions Over Time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "victoriametrics-logs-datasource", "uid": "victorialogs" },
+      "targets": [
+        { "expr": "_stream:{source=\"suricata\", event_type=\"alert\"} AND action:\"blocked\" | stats by (_time:5m) count() as blocked", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "red" },
+          "custom": { "fillOpacity": 30, "lineWidth": 2, "drawStyle": "bars" }
+        }
+      }
+    },
+    {
+      "title": "Total Blocked",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 8 },
+      "datasource": { "type": "victoriametrics-logs-datasource", "uid": "victorialogs" },
+      "targets": [
+        { "expr": "_stream:{source=\"suricata\", event_type=\"alert\"} AND action:\"blocked\" | stats count() as total", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "fixed", "fixedColor": "red" } }
+      }
+    },
+    {
+      "title": "Total Allowed",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 8 },
+      "datasource": { "type": "victoriametrics-logs-datasource", "uid": "victorialogs" },
+      "targets": [
+        { "expr": "_stream:{source=\"suricata\", event_type=\"alert\"} AND action:\"allowed\" | stats count() as total", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "fixed", "fixedColor": "green" } }
+      }
+    },
+    {
+      "title": "Alert Severity Distribution",
+      "type": "piechart",
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 8 },
+      "datasource": { "type": "victoriametrics-logs-datasource", "uid": "victorialogs" },
+      "targets": [
+        { "expr": "_stream:{source=\"suricata\", event_type=\"alert\"} | stats by (severity) count() as hits | sort by (hits) desc", "refId": "A" }
+      ]
+    },
+    {
+      "title": "Top Blocked Source IPs",
+      "type": "table",
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "victoriametrics-logs-datasource", "uid": "victorialogs" },
+      "targets": [
+        { "expr": "_stream:{source=\"suricata\", event_type=\"alert\"} AND action:\"blocked\" | stats by (src_ip) count() as hits | sort by (hits) desc | limit 20", "refId": "A" }
+      ]
+    },
+    {
+      "title": "Top Blocked Signatures",
+      "type": "table",
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "victoriametrics-logs-datasource", "uid": "victorialogs" },
+      "targets": [
+        { "expr": "_stream:{source=\"suricata\", event_type=\"alert\"} AND action:\"blocked\" | stats by (signature) count() as hits | sort by (hits) desc | limit 20", "refId": "A" }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["nib", "crowdsec", "blocking"],
+  "time": { "from": "now-24h", "to": "now" },
+  "title": "CrowdSec Decisions & Blocking",
+  "uid": "nib-crowdsec-decisions",
+  "version": 1
+}

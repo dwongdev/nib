@@ -1,0 +1,59 @@
+# Response Stack - CrowdSec Security Engine
+# Parses Suricata EVE logs, detects attack patterns, and blocks threats
+# Includes firewall bouncer for automated IP blocking
+
+services:
+  nib-crowdsec:
+    image: crowdsecurity/crowdsec:v1.6
+    container_name: nib-crowdsec
+    restart: unless-stopped
+    environment:
+      - COLLECTIONS=crowdsecurity/suricata crowdsecurity/iptables crowdsecurity/linux
+      - ENROLL_KEY=${CROWDSEC_ENROLL_KEY:-}
+      - ENROLL_INSTANCE_NAME=${CROWDSEC_INSTANCE_NAME:-nib}
+      - BOUNCER_KEY_firewall=${CROWDSEC_BOUNCER_KEY:-}
+      - TZ=${TZ:-UTC}
+    volumes:
+      - ./config/acquis.yaml:/etc/crowdsec/acquis.yaml:ro
+      - ./config/profiles.yaml:/etc/crowdsec/profiles.yaml:ro
+      - crowdsec-data:/var/lib/crowdsec/data
+      - crowdsec-config:/etc/crowdsec
+      - suricata-logs:/var/log/suricata:ro
+    networks:
+      - nib-network
+    ports:
+      - "${CROWDSEC_API_BIND:-127.0.0.1}:${CROWDSEC_API_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "cscli", "version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  nib-bouncer-firewall:
+    image: crowdsecurity/crowdsec-firewall-bouncer-iptables:v0.0.31
+    container_name: nib-bouncer-firewall
+    restart: unless-stopped
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    environment:
+      - CROWDSEC_LAPI_URL=http://${CROWDSEC_API_BIND:-127.0.0.1}:${CROWDSEC_API_PORT:-8080}
+      - CROWDSEC_BOUNCER_API_KEY=${CROWDSEC_BOUNCER_KEY:-}
+    depends_on:
+      nib-crowdsec:
+        condition: service_healthy
+    volumes:
+      - ./config/bouncer.yaml:/etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml:ro
+
+networks:
+  nib-network:
+    external: true
+
+volumes:
+  crowdsec-data:
+  crowdsec-config:
+  suricata-logs:
+    external: true
+    name: suricata_suricata-logs
