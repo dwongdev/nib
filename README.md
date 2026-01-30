@@ -124,6 +124,14 @@ That's it. Suricata is monitoring your network interface, CrowdSec is analyzing 
 | `make bouncer-status` | Check bouncer connection |
 | `make metrics` | Show CrowdSec statistics |
 
+### Router Sync (Sensor Mode)
+
+| Command | Description |
+|---------|-------------|
+| `make add-router-bouncer` | Generate a bouncer API key for your router |
+| `make router-sync` | Push CrowdSec decisions to router (one-shot) |
+| `make router-sync-daemon` | Push CrowdSec decisions to router (continuous) |
+
 ### Testing
 
 | Command | Description |
@@ -285,11 +293,27 @@ Switch (SPAN port) ──mirror──→ [NIB Sensor]
                                 Bouncer blocks on sensor only
 ```
 
-To block on your actual firewall, swap the iptables bouncer for one that talks to your firewall's API. CrowdSec provides ready-made bouncers for:
-- **pfSense** / **OPNsense** - REST API bouncer
-- **Cloudflare** - Edge blocking
-- **nginx** / **HAProxy** - Reverse proxy blocking
-- **AWS WAF** / **GCP** - Cloud firewall
+To block on your actual firewall, set `BOUNCER_MODE=sensor` in `.env`. This disables the local iptables bouncer and exposes the CrowdSec LAPI so remote bouncers can pull decisions. Then choose how to push bans to your router:
+
+**Native plugin (easiest):** pfSense and OPNsense have CrowdSec packages in their plugin repos. Point them at `http://<nib-host>:8080` with a key from `make add-router-bouncer`.
+
+**Router sync script:** For MikroTik, OpenWrt, or any router with a REST API:
+
+```bash
+# In .env
+BOUNCER_MODE=sensor
+ROUTER_TYPE=mikrotik          # mikrotik, opnsense, pfsense, openwrt, generic
+ROUTER_URL=https://192.168.1.1
+ROUTER_USER=admin
+ROUTER_PASS=your-password
+
+# Start continuous sync
+make router-sync-daemon
+```
+
+**CDN/cloud:** CrowdSec has official bouncers for Cloudflare, AWS WAF, nginx, and HAProxy — all can pull from your NIB LAPI.
+
+See [crowdsec/README.md](crowdsec/README.md) for detailed setup instructions per router.
 
 #### 3. Individual Server (protect one host)
 

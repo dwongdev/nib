@@ -62,26 +62,36 @@ install-suricata: network ## Install Suricata IDS
 	@$(DOCKER_COMPOSE) -f suricata/compose.yaml up -d
 	@echo "$(GREEN)✓ Suricata installed$(RESET)"
 
-install-crowdsec: network ## Install CrowdSec security engine + firewall bouncer
+install-crowdsec: network ## Install CrowdSec (local bouncer or sensor mode via BOUNCER_MODE)
 	@echo "$(CYAN)Installing CrowdSec...$(RESET)"
-	@# Start CrowdSec engine first
-	@$(DOCKER_COMPOSE) -f crowdsec/compose.yaml up -d nib-crowdsec
-	@echo "$(YELLOW)  Waiting for CrowdSec to initialize...$(RESET)"
-	@sleep 10
-	@# Generate bouncer key if not set
-	@if grep -q 'CROWDSEC_BOUNCER_KEY=$$' .env 2>/dev/null; then \
-		BOUNCER_KEY=$$(docker exec nib-crowdsec cscli bouncers add nib-firewall-bouncer -o raw 2>/dev/null || echo ""); \
-		if [ -n "$$BOUNCER_KEY" ]; then \
-			if [ "$$(uname)" = "Darwin" ]; then \
-				sed -i '' "s|CROWDSEC_BOUNCER_KEY=.*|CROWDSEC_BOUNCER_KEY=$$BOUNCER_KEY|" .env; \
-			else \
-				sed -i "s|CROWDSEC_BOUNCER_KEY=.*|CROWDSEC_BOUNCER_KEY=$$BOUNCER_KEY|" .env; \
+	@set -a; . ./.env 2>/dev/null || true; set +a; \
+	BMODE=$${BOUNCER_MODE:-local}; \
+	if [ "$$BMODE" = "sensor" ]; then \
+		echo "$(YELLOW)  Sensor mode: no local bouncer, LAPI exposed for remote bouncers$(RESET)"; \
+		$(DOCKER_COMPOSE) -f crowdsec/compose-sensor.yaml up -d; \
+		echo "$(YELLOW)  Waiting for CrowdSec to initialize...$(RESET)"; \
+		sleep 10; \
+		echo "$(CYAN)  Generate a bouncer key for your router:$(RESET)"; \
+		echo "    docker exec nib-crowdsec cscli bouncers add my-router -o raw"; \
+		echo "  Then configure ROUTER_* variables in .env and run:"; \
+		echo "    make router-sync"; \
+	else \
+		$(DOCKER_COMPOSE) -f crowdsec/compose.yaml up -d nib-crowdsec; \
+		echo "$(YELLOW)  Waiting for CrowdSec to initialize...$(RESET)"; \
+		sleep 10; \
+		if grep -q 'CROWDSEC_BOUNCER_KEY=$$' .env 2>/dev/null; then \
+			BOUNCER_KEY=$$(docker exec nib-crowdsec cscli bouncers add nib-firewall-bouncer -o raw 2>/dev/null || echo ""); \
+			if [ -n "$$BOUNCER_KEY" ]; then \
+				if [ "$$(uname)" = "Darwin" ]; then \
+					sed -i '' "s|CROWDSEC_BOUNCER_KEY=.*|CROWDSEC_BOUNCER_KEY=$$BOUNCER_KEY|" .env; \
+				else \
+					sed -i "s|CROWDSEC_BOUNCER_KEY=.*|CROWDSEC_BOUNCER_KEY=$$BOUNCER_KEY|" .env; \
+				fi; \
+				echo "$(GREEN)  ✓ Generated bouncer API key$(RESET)"; \
 			fi; \
-			echo "$(GREEN)  ✓ Generated bouncer API key$(RESET)"; \
 		fi; \
+		$(DOCKER_COMPOSE) -f crowdsec/compose.yaml up -d; \
 	fi
-	@# Start bouncer
-	@$(DOCKER_COMPOSE) -f crowdsec/compose.yaml up -d
 	@echo "$(GREEN)✓ CrowdSec installed$(RESET)"
 
 install-storage: network ## Install VictoriaLogs + Vector log shipper
@@ -100,7 +110,7 @@ start: ## Start all stacks
 	@echo "$(CYAN)Starting NIB...$(RESET)"
 	@$(DOCKER_COMPOSE) -f suricata/compose.yaml up -d
 	@$(DOCKER_COMPOSE) -f storage/compose.yaml up -d
-	@$(DOCKER_COMPOSE) -f crowdsec/compose.yaml up -d
+	@$(MAKE) --no-print-directory start-crowdsec
 	@$(DOCKER_COMPOSE) -f grafana/compose.yaml up -d
 	@echo "$(GREEN)✓ All stacks started$(RESET)"
 
@@ -108,6 +118,7 @@ stop: ## Stop all stacks
 	@echo "$(CYAN)Stopping NIB...$(RESET)"
 	@$(DOCKER_COMPOSE) -f grafana/compose.yaml down 2>/dev/null || true
 	@$(DOCKER_COMPOSE) -f crowdsec/compose.yaml down 2>/dev/null || true
+	@$(DOCKER_COMPOSE) -f crowdsec/compose-sensor.yaml down 2>/dev/null || true
 	@$(DOCKER_COMPOSE) -f storage/compose.yaml down 2>/dev/null || true
 	@$(DOCKER_COMPOSE) -f suricata/compose.yaml down 2>/dev/null || true
 	@echo "$(GREEN)✓ All stacks stopped$(RESET)"
@@ -121,10 +132,16 @@ stop-suricata: ## Stop Suricata
 	@$(DOCKER_COMPOSE) -f suricata/compose.yaml down
 
 start-crowdsec: ## Start CrowdSec
-	@$(DOCKER_COMPOSE) -f crowdsec/compose.yaml up -d
+	@set -a; . ./.env 2>/dev/null || true; set +a; \
+	if [ "$${BOUNCER_MODE:-local}" = "sensor" ]; then \
+		$(DOCKER_COMPOSE) -f crowdsec/compose-sensor.yaml up -d; \
+	else \
+		$(DOCKER_COMPOSE) -f crowdsec/compose.yaml up -d; \
+	fi
 
 stop-crowdsec: ## Stop CrowdSec
-	@$(DOCKER_COMPOSE) -f crowdsec/compose.yaml down
+	@$(DOCKER_COMPOSE) -f crowdsec/compose.yaml down 2>/dev/null || true
+	@$(DOCKER_COMPOSE) -f crowdsec/compose-sensor.yaml down 2>/dev/null || true
 
 start-storage: ## Start storage (VictoriaLogs + Vector)
 	@$(DOCKER_COMPOSE) -f storage/compose.yaml up -d
@@ -146,6 +163,7 @@ uninstall: ## Uninstall all stacks and remove volumes
 		[ "$$confirm" = "y" ] || [ "$$confirm" = "Y" ] || (echo "Cancelled." && exit 1)
 	@$(DOCKER_COMPOSE) -f grafana/compose.yaml down -v 2>/dev/null || true
 	@$(DOCKER_COMPOSE) -f crowdsec/compose.yaml down -v 2>/dev/null || true
+	@$(DOCKER_COMPOSE) -f crowdsec/compose-sensor.yaml down -v 2>/dev/null || true
 	@$(DOCKER_COMPOSE) -f storage/compose.yaml down -v 2>/dev/null || true
 	@$(DOCKER_COMPOSE) -f suricata/compose.yaml down -v 2>/dev/null || true
 	@docker network rm nib-network 2>/dev/null || true
@@ -287,6 +305,30 @@ bouncer-status: ## Check firewall bouncer status
 metrics: ## Show CrowdSec metrics
 	@docker exec nib-crowdsec cscli metrics
 
+# ==================== Router Sync (Sensor Mode) ====================
+
+router-sync: ## Sync CrowdSec decisions to router (one-shot)
+	@./scripts/router-sync.sh
+
+router-sync-daemon: ## Sync CrowdSec decisions to router (continuous)
+	@./scripts/router-sync.sh --daemon
+
+add-router-bouncer: ## Generate a bouncer API key for your router
+	@echo "$(CYAN)Generating bouncer key for router...$(RESET)"
+	@KEY=$$(docker exec nib-crowdsec cscli bouncers add nib-router-bouncer -o raw 2>/dev/null); \
+	if [ -n "$$KEY" ]; then \
+		echo "$(GREEN)✓ Bouncer key: $$KEY$(RESET)"; \
+		echo ""; \
+		echo "  Add to .env:"; \
+		echo "    CROWDSEC_LAPI_KEY=$$KEY"; \
+		echo ""; \
+		echo "  Or for native router bouncers (pfSense/OPNsense plugin):"; \
+		echo "    LAPI URL:  http://<nib-host>:$${CROWDSEC_API_PORT:-8080}"; \
+		echo "    API Key:   $$KEY"; \
+	else \
+		echo "$(RED)Failed to generate key. Is CrowdSec running?$(RESET)"; \
+	fi
+
 # ==================== Testing ====================
 
 test-alert: ## Trigger a test IDS alert (requires curl + internet)
@@ -351,5 +393,6 @@ validate: ## Validate configuration files
 	shell-suricata shell-crowdsec shell-grafana \
 	update-rules reload-rules test-rules \
 	decisions alerts ban unban collections bouncer-status metrics \
+	router-sync router-sync-daemon add-router-bouncer \
 	test-alert test-dns \
 	open ps check-ports clean validate

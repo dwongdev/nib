@@ -1,0 +1,43 @@
+# Response Stack - CrowdSec Security Engine (Sensor Mode)
+# Runs CrowdSec without the local iptables bouncer.
+# Use this when blocking happens on a remote device (router, firewall, CDN).
+# The LAPI is exposed on the network so remote bouncers can pull decisions.
+
+services:
+  nib-crowdsec:
+    image: crowdsecurity/crowdsec:v1.6
+    container_name: nib-crowdsec
+    restart: unless-stopped
+    environment:
+      - COLLECTIONS=crowdsecurity/suricata crowdsecurity/iptables crowdsecurity/linux
+      - ENROLL_KEY=${CROWDSEC_ENROLL_KEY:-}
+      - ENROLL_INSTANCE_NAME=${CROWDSEC_INSTANCE_NAME:-nib}
+      - TZ=${TZ:-UTC}
+    volumes:
+      - ./config/acquis.yaml:/etc/crowdsec/acquis.yaml:ro
+      - ./config/profiles.yaml:/etc/crowdsec/profiles.yaml:ro
+      - crowdsec-data:/var/lib/crowdsec/data
+      - crowdsec-config:/etc/crowdsec
+      - suricata-logs:/var/log/suricata:ro
+    networks:
+      - nib-network
+    ports:
+      # Expose LAPI to network so remote bouncers can connect
+      - "${CROWDSEC_API_BIND:-0.0.0.0}:${CROWDSEC_API_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "cscli", "version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  nib-network:
+    external: true
+
+volumes:
+  crowdsec-data:
+  crowdsec-config:
+  suricata-logs:
+    external: true
+    name: suricata_suricata-logs
