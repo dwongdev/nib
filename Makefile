@@ -91,6 +91,10 @@ install-crowdsec: network ## Install CrowdSec (local bouncer or sensor mode via 
 				echo "$(GREEN)  ✓ Generated bouncer API key$(RESET)"; \
 			fi; \
 		fi; \
+		set -a; . ./.env 2>/dev/null || true; set +a; \
+		CROWDSEC_LAPI_URL="http://$${CROWDSEC_API_BIND:-127.0.0.1}:$${CROWDSEC_API_PORT:-8080}"; \
+		export CROWDSEC_LAPI_URL CROWDSEC_BOUNCER_KEY; \
+		envsubst '$$CROWDSEC_LAPI_URL $$CROWDSEC_BOUNCER_KEY' < crowdsec/config/bouncer.yaml > crowdsec/config/active-bouncer.yaml; \
 		$(DOCKER_COMPOSE) -f crowdsec/compose.yaml up -d; \
 	fi
 	@echo "$(GREEN)✓ CrowdSec installed$(RESET)"

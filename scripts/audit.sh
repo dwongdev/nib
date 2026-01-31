@@ -149,7 +149,7 @@ fi
 
 section_header "Container Security Posture"
 
-echo "$POLICY" | grep -v '^$' | while IFS='|' read -r cname need_cap_drop allowed_caps need_no_new_priv need_readonly need_host_net; do
+while IFS='|' read -r cname need_cap_drop allowed_caps need_no_new_priv need_readonly need_host_net; do
   # Skip empty lines
   [ -z "$cname" ] && continue
 
@@ -252,7 +252,7 @@ echo "$POLICY" | grep -v '^$' | while IFS='|' read -r cname need_cap_drop allowe
     record pass "container" "${cname}/env" "no default/empty secrets detected"
   fi
 
-done
+done < <(echo "$POLICY" | grep -v '^$')
 
 # ═════════════════════════════════════════════════════════════════════════════
 # SECTION 3: Runtime Checks

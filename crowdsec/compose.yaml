@@ -58,7 +58,7 @@ services:
       nib-crowdsec:
         condition: service_healthy
     volumes:
-      - ./config/bouncer.yaml:/etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml:ro
+      - ./config/active-bouncer.yaml:/etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml:ro
 
 networks:
   nib-network:

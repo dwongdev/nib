@@ -47,6 +47,7 @@ suricata/rules/suricata.rules
 # Generated configs (selected at install based on PRIVACY_MODE)
 suricata/config/active-suricata.yaml
 storage/active-vector.yaml
+crowdsec/config/active-bouncer.yaml
 
 # Test outputs
 coverage/
