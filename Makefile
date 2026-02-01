@@ -326,6 +326,9 @@ metrics: ## Show CrowdSec metrics
 router-sync: ## Sync CrowdSec decisions to router (one-shot)
 	@./scripts/router-sync.sh
 
+router-sync-dry-run: ## Dry-run router sync (show what would change)
+	@./scripts/router-sync.sh --dry-run
+
 router-sync-daemon: ## Sync CrowdSec decisions to router (continuous)
 	@./scripts/router-sync.sh --daemon
 
@@ -415,6 +418,6 @@ validate: ## Validate configuration files
 	shell-suricata shell-crowdsec shell-grafana \
 	update-rules reload-rules test-rules \
 	decisions alerts ban unban collections bouncer-status metrics \
-	router-sync router-sync-daemon add-router-bouncer \
+	router-sync router-sync-dry-run router-sync-daemon add-router-bouncer \
 	test-alert test-dns \
 	open ps check-ports clean audit audit-json validate

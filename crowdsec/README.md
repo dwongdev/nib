@@ -196,8 +196,14 @@ CROWDSEC_LAPI_KEY=<key from make add-router-bouncer>
 # One-shot sync
 make router-sync
 
+# Dry-run (show what would be synced without making changes)
+./scripts/router-sync.sh --dry-run
+
 # Continuous daemon (polls every 60s)
 make router-sync-daemon
+
+# Custom poll interval
+./scripts/router-sync.sh --daemon --interval 30
 ```
 
 **Supported routers:**
@@ -403,11 +409,14 @@ curl -s -H "X-Api-Key: YOUR_BOUNCER_KEY" http://127.0.0.1:8080/v1/decisions | py
 # Test router API connectivity (MikroTik example)
 curl -sk -u nib-sync:password https://192.168.1.1/rest/ip/firewall/address-list?list=nib-blocklist
 
-# Run sync with debug output — the script prints each IP it adds/removes
-make router-sync
+# Run sync with verbose output — the script prints each IP it adds/removes
+./scripts/router-sync.sh --verbose
+
+# Dry-run to see what would happen without making changes
+./scripts/router-sync.sh --dry-run
 
 # Check state file (tracks what was last synced)
-cat /tmp/nib-router-sync-last.json
+cat /var/lib/nib/router-sync-state.txt  # or /tmp/nib-router-sync-state.txt if /var/lib/nib is not writable
 ```
 
 Common issues:
@@ -415,6 +424,7 @@ Common issues:
 - **Authentication failures**: Check `ROUTER_USER` / `ROUTER_PASS`. MikroTik REST API requires the `api` policy on the user group.
 - **SSL errors**: Set `ROUTER_VERIFY_SSL=false` for self-signed router certs.
 - **Empty sync**: No active CrowdSec decisions yet. Trigger a test with `make test-alert`, wait 30s, then retry.
+- **State lost on reboot**: Set `STATE_DIR=/var/lib/nib` (default) to persist state across reboots.
 
 #### Option C: Cloudflare / CDN Bouncer
 
