@@ -63,6 +63,29 @@ Part of the **in-a-Box** family:
 
 > **Note**: Suricata requires `network_mode: host` and `NET_ADMIN` + `NET_RAW` capabilities for packet capture. CrowdSec's firewall bouncer requires `NET_ADMIN` for iptables access.
 
+### Hardware Sizing by Link Speed
+
+Suricata performs deep packet inspection on every packet. CPU is the main bottleneck — each worker thread handles ~300-400 Mbps with the full ET Open ruleset.
+
+| Link Speed | CPU | RAM | Storage | Example Hardware |
+|------------|-----|-----|---------|------------------|
+| **100 Mbps** | 2 cores | 2 GB | 20 GB | Raspberry Pi 4 (4GB), any old PC |
+| **500 Mbps** | 4 cores | 4 GB | 50 GB | Intel N100 mini PC, NUC |
+| **1 Gbps** | 4-6 cores | 8 GB | 100 GB | Intel N305, i5 NUC, old desktop |
+| **2.5 Gbps** | 8 cores | 16 GB | 200 GB | i5/i7 desktop, Ryzen 5 |
+| **10 Gbps** | 16+ cores | 32 GB | 500 GB+ | Xeon/EPYC server, high-end workstation |
+
+**NIC recommendations:**
+- **1 Gbps**: Any Intel NIC (i210, i350) — avoid Realtek for high packet rates
+- **2.5 Gbps**: Intel i225-V, Realtek RTL8125
+- **10 Gbps**: Intel X520/X540, Mellanox ConnectX-3/4 (requires kernel drivers)
+
+**Notes:**
+- These are for **sustained** throughput. Bursty home traffic uses far less — a 4-core system often handles 1 Gbps fine
+- 10 Gbps requires careful tuning (RSS, CPU affinity, ring buffers) — see [docs/10g-tuning.md](docs/10g-tuning.md) if available
+- VMs work great — just ensure virtio or SR-IOV passthrough for high speeds
+- Check for packet drops: `make shell-suricata` then `suricatasc -c "iface-stat default"`
+
 ## Quick Start
 
 ```bash
