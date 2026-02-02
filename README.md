@@ -214,6 +214,20 @@ SURICATA_INTERFACE=eth0    # Change to your interface (eth0, ens33, etc.)
 
 Find your interface: `ip link show` or `ifconfig`
 
+### Port Mirroring (Sensor Mode)
+
+When using NIB as a dedicated sensor, configure your switch to mirror traffic:
+
+| Switch | Setup Guide |
+|--------|-------------|
+| **UniFi** | Ports tab → Port Mirroring → Select source/destination |
+| **TP-Link Omada** | Ports tab → Port Mirroring (IDS only, no bouncer yet) |
+| **MikroTik** | Full support with `ROUTER_TYPE=mikrotik` |
+| **Cisco** | Monitor session CLI or web UI |
+| **Netgear** | Monitoring → Mirroring |
+
+See **[docs/switch-mirroring.md](docs/switch-mirroring.md)** for detailed setup guides.
+
 ### Home Network
 
 Define your internal network ranges:

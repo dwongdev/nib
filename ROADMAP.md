@@ -9,6 +9,7 @@ This is a living roadmap. Priorities may shift based on feedback and community c
 - GeoIP enrichment for source/destination IPs
 - Additional Grafana dashboards (HTTP analysis, flow analysis)
 - Integration guide for running alongside SIB
+- 🚧 **TP-Link Omada API bouncer** - Push CrowdSec decisions to Omada-managed gateways via IP Groups + ACL rules (script ready, needs testing with real controller)
 
 ## 3-6 months
 

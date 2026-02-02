@@ -348,6 +348,23 @@ add-router-bouncer: ## Generate a bouncer API key for your router
 		echo "$(RED)Failed to generate key. Is CrowdSec running?$(RESET)"; \
 	fi
 
+# ==================== Omada Sync (Sensor Mode) ====================
+
+omada-sync: ## Sync CrowdSec decisions to Omada Controller (one-shot)
+	@echo "$(CYAN)Syncing CrowdSec decisions to Omada...$(RESET)"
+	@set -a; . ./.env 2>/dev/null || true; set +a; \
+	python3 scripts/omada-sync.py
+
+omada-sync-dry-run: ## Dry-run Omada sync (show what would change)
+	@echo "$(CYAN)Dry-run Omada sync...$(RESET)"
+	@set -a; . ./.env 2>/dev/null || true; set +a; \
+	python3 scripts/omada-sync.py --dry-run
+
+omada-sync-daemon: ## Sync CrowdSec decisions to Omada (continuous)
+	@echo "$(CYAN)Starting Omada sync daemon...$(RESET)"
+	@set -a; . ./.env 2>/dev/null || true; set +a; \
+	python3 scripts/omada-sync.py --daemon
+
 # ==================== Testing ====================
 
 test-alert: ## Trigger a test IDS alert (requires curl + internet)
