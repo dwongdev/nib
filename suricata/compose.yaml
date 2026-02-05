@@ -21,8 +21,6 @@ services:
       - ./rules:/etc/suricata/rules:ro
       - suricata-logs:/var/log/suricata
       - suricata-run:/var/run/suricata
-    environment:
-      - SURICATA_OPTIONS=${SURICATA_OPTIONS:--i ${SURICATA_INTERFACE:-eth0}}
     command: >
       -c /etc/suricata/suricata.yaml
       -i ${SURICATA_INTERFACE:-eth0}

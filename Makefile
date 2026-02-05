@@ -67,19 +67,30 @@ install-crowdsec: network ## Install CrowdSec (local bouncer or sensor mode via 
 	@echo "$(CYAN)Installing CrowdSec...$(RESET)"
 	@set -a; . ./.env 2>/dev/null || true; set +a; \
 	BMODE=$${BOUNCER_MODE:-local}; \
+	wait_for_crowdsec() { \
+		echo "$(YELLOW)  Waiting for CrowdSec to initialize...$(RESET)"; \
+		for i in $$(seq 1 30); do \
+			if docker exec nib-crowdsec cscli version >/dev/null 2>&1; then return 0; fi; \
+			sleep 2; \
+		done; \
+		echo "$(RED)  CrowdSec did not become ready within 60s$(RESET)"; \
+		return 1; \
+	}; \
 	if [ "$$BMODE" = "sensor" ]; then \
 		echo "$(YELLOW)  Sensor mode: no local bouncer, LAPI exposed for remote bouncers$(RESET)"; \
 		$(DOCKER_COMPOSE) -f crowdsec/compose-sensor.yaml up -d; \
-		echo "$(YELLOW)  Waiting for CrowdSec to initialize...$(RESET)"; \
-		sleep 10; \
+		docker cp crowdsec/config/acquis.yaml nib-crowdsec:/etc/crowdsec/acquis.yaml; \
+		docker cp crowdsec/config/profiles.yaml nib-crowdsec:/etc/crowdsec/profiles.yaml; \
+		wait_for_crowdsec; \
 		echo "$(CYAN)  Generate a bouncer key for your router:$(RESET)"; \
 		echo "    docker exec nib-crowdsec cscli bouncers add my-router -o raw"; \
 		echo "  Then configure ROUTER_* variables in .env and run:"; \
 		echo "    make router-sync"; \
 	else \
 		$(DOCKER_COMPOSE) -f crowdsec/compose.yaml up -d nib-crowdsec; \
-		echo "$(YELLOW)  Waiting for CrowdSec to initialize...$(RESET)"; \
-		sleep 10; \
+		docker cp crowdsec/config/acquis.yaml nib-crowdsec:/etc/crowdsec/acquis.yaml; \
+		docker cp crowdsec/config/profiles.yaml nib-crowdsec:/etc/crowdsec/profiles.yaml; \
+		wait_for_crowdsec; \
 		if grep -q 'CROWDSEC_BOUNCER_KEY=$$' .env 2>/dev/null; then \
 			BOUNCER_KEY=$$(docker exec nib-crowdsec cscli bouncers add nib-firewall-bouncer -o raw 2>/dev/null || echo ""); \
 			if [ -n "$$BOUNCER_KEY" ]; then \
@@ -218,9 +229,10 @@ health: ## Quick health check
 		echo "  $(GREEN)✓$(RESET) Suricata running" || echo "  $(RED)✗$(RESET) Suricata not running"
 	@docker exec nib-crowdsec cscli version >/dev/null 2>&1 && \
 		echo "  $(GREEN)✓$(RESET) CrowdSec running" || echo "  $(RED)✗$(RESET) CrowdSec not running"
-	@curl -sf http://localhost:$${VICTORIALOGS_PORT:-9428}/health >/dev/null 2>&1 && \
-		echo "  $(GREEN)✓$(RESET) VictoriaLogs healthy" || echo "  $(RED)✗$(RESET) VictoriaLogs not healthy"
-	@curl -sf http://localhost:$${GRAFANA_PORT:-3001}/api/health >/dev/null 2>&1 && \
+	@set -a; . ./.env 2>/dev/null || true; set +a; \
+	curl -sf http://localhost:$${VICTORIALOGS_PORT:-9428}/health >/dev/null 2>&1 && \
+		echo "  $(GREEN)✓$(RESET) VictoriaLogs healthy" || echo "  $(RED)✗$(RESET) VictoriaLogs not healthy"; \
+	curl -sf http://localhost:$${GRAFANA_PORT:-3001}/api/health >/dev/null 2>&1 && \
 		echo "  $(GREEN)✓$(RESET) Grafana healthy" || echo "  $(RED)✗$(RESET) Grafana not healthy"
 
 info: ## Show endpoints and access info
@@ -240,11 +252,12 @@ info: ## Show endpoints and access info
 
 logs: ## Tail logs from all services
 	@echo "$(CYAN)Tailing all logs (Ctrl+C to stop)...$(RESET)"
-	@docker logs -f nib-suricata --tail 20 2>/dev/null &
-	@docker logs -f nib-crowdsec --tail 20 2>/dev/null &
-	@docker logs -f nib-vector --tail 20 2>/dev/null &
-	@docker logs -f nib-grafana --tail 20 2>/dev/null &
-	@wait
+	@trap 'kill $$(jobs -p) 2>/dev/null' EXIT; \
+	docker logs -f nib-suricata --tail 20 2>/dev/null & \
+	docker logs -f nib-crowdsec --tail 20 2>/dev/null & \
+	docker logs -f nib-vector --tail 20 2>/dev/null & \
+	docker logs -f nib-grafana --tail 20 2>/dev/null & \
+	wait
 
 logs-suricata: ## Tail Suricata logs
 	@docker logs -f nib-suricata --tail 50
@@ -296,8 +309,15 @@ reload-rules: ## Reload Suricata rules without restart
 
 test-rules: ## Validate Suricata rule syntax
 	@echo "$(CYAN)Testing rule syntax...$(RESET)"
-	@docker exec nib-suricata suricata -T -c /etc/suricata/suricata.yaml 2>&1 | tail -5
-	@echo "$(GREEN)✓ Rule test complete$(RESET)"
+	@OUTPUT=$$(docker exec nib-suricata suricata -T -c /etc/suricata/suricata.yaml 2>&1); \
+	RC=$$?; \
+	echo "$$OUTPUT" | tail -5; \
+	if [ $$RC -eq 0 ]; then \
+		echo "$(GREEN)✓ Rule test passed$(RESET)"; \
+	else \
+		echo "$(RED)✗ Rule test failed$(RESET)"; \
+		exit 1; \
+	fi
 
 # ==================== CrowdSec Management ====================
 

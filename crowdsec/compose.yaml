@@ -23,8 +23,6 @@ services:
       - BOUNCER_KEY_firewall=${CROWDSEC_BOUNCER_KEY:-}
       - TZ=${TZ:-UTC}
     volumes:
-      - ./config/acquis.yaml:/etc/crowdsec/acquis.yaml:ro
-      - ./config/profiles.yaml:/etc/crowdsec/profiles.yaml:ro
       - crowdsec-data:/var/lib/crowdsec/data
       - crowdsec-config:/etc/crowdsec
       - suricata-logs:/var/log/suricata:ro

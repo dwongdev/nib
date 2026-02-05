@@ -134,7 +134,6 @@ sinks:
     api_version: v8
     query:
       _stream_fields: source,event_type
-      _msg_field: message
       _time_field: timestamp
     healthcheck:
       enabled: false
