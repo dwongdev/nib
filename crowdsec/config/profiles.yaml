@@ -1,18 +1,20 @@
 # NIB - CrowdSec Decision Profiles
 # Controls what happens when an attack is detected
+# NOTE: Profiles are evaluated top-to-bottom; first match wins (on_success: break).
+# More specific profiles must come before generic ones.
 
-name: default_ip_remediation
-filters:
-  - Alert.Remediation == true && Alert.GetScope() == "Ip"
-decisions:
-  - type: ban
-    duration: 4h
-on_success: break
----
 name: high_severity_ip_remediation
 filters:
   - Alert.Remediation == true && Alert.GetScope() == "Ip" && Alert.GetScenario() contains "suricata"
 decisions:
   - type: ban
     duration: 24h
+on_success: break
+---
+name: default_ip_remediation
+filters:
+  - Alert.Remediation == true && Alert.GetScope() == "Ip"
+decisions:
+  - type: ban
+    duration: 4h
 on_success: break

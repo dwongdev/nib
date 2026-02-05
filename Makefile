@@ -36,7 +36,7 @@ install: network ## Install all stacks (Suricata + CrowdSec + Storage + Grafana)
 		cp .env.example .env; \
 	fi
 	@# Auto-generate Grafana password if needed
-	@if grep -q 'GRAFANA_ADMIN_PASSWORD=CHANGE_ME\|GRAFANA_ADMIN_PASSWORD=$$' .env 2>/dev/null; then \
+	@if grep -qE 'GRAFANA_ADMIN_PASSWORD=(CHANGE_ME)?$$' .env 2>/dev/null; then \
 		NEW_PASS=$$(openssl rand -base64 18 | tr -d '/+=' | head -c 24); \
 		if [ "$$(uname)" = "Darwin" ]; then \
 			sed -i '' "s|GRAFANA_ADMIN_PASSWORD=.*|GRAFANA_ADMIN_PASSWORD=$$NEW_PASS|" .env; \
@@ -276,13 +276,18 @@ shell-grafana: ## Shell into Grafana container
 
 update-rules: ## Download/update Suricata ET Open rules
 	@echo "$(CYAN)Updating Suricata rules...$(RESET)"
-	@curl -sSL https://rules.emergingthreats.net/open/suricata-7.0/emerging.rules.tar.gz | \
-		tar xz -C /tmp/
-	@cp /tmp/rules/*.rules suricata/rules/suricata.rules 2>/dev/null || \
-		cat /tmp/rules/*.rules > suricata/rules/suricata.rules
-	@rm -rf /tmp/rules/
-	@echo "$(GREEN)✓ Rules updated$(RESET)"
-	@wc -l suricata/rules/suricata.rules | awk '{printf "  %s rules loaded\n", $$1}'
+	@TMPDIR=$$(mktemp -d); \
+	if curl -sSL https://rules.emergingthreats.net/open/suricata-7.0/emerging.rules.tar.gz | \
+		tar xz -C "$$TMPDIR"; then \
+		cat "$$TMPDIR"/rules/*.rules > "$$TMPDIR/combined.rules" && \
+		[ -s "$$TMPDIR/combined.rules" ] && \
+		mv "$$TMPDIR/combined.rules" suricata/rules/suricata.rules && \
+		echo "$(GREEN)✓ Rules updated$(RESET)" && \
+		wc -l suricata/rules/suricata.rules | awk '{printf "  %s rules loaded\n", $$1}'; \
+	else \
+		echo "$(RED)✗ Failed to download rules. Existing rules preserved.$(RESET)"; \
+	fi; \
+	rm -rf "$$TMPDIR"
 
 reload-rules: ## Reload Suricata rules without restart
 	@echo "$(CYAN)Reloading Suricata rules...$(RESET)"

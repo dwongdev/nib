@@ -40,24 +40,11 @@ RED='\033[31m'
 CYAN='\033[36m'
 RESET='\033[0m'
 
-# Configuration
-CROWDSEC_LAPI_URL="${CROWDSEC_LAPI_URL:-http://127.0.0.1:8080}"
-CROWDSEC_LAPI_KEY="${CROWDSEC_LAPI_KEY:-}"
-ROUTER_TYPE="${ROUTER_TYPE:-generic}"
-ROUTER_URL="${ROUTER_URL:-}"
-ROUTER_USER="${ROUTER_USER:-}"
-ROUTER_PASS="${ROUTER_PASS:-}"
-ROUTER_LIST_NAME="${ROUTER_LIST_NAME:-nib-blocklist}"
-ROUTER_VERIFY_SSL="${ROUTER_VERIFY_SSL:-false}"
-SYNC_INTERVAL="${SYNC_INTERVAL:-60}"
-STATE_DIR="${STATE_DIR:-/var/lib/nib}"
-
 # State
 DAEMON_MODE=false
 DRY_RUN=false
 VERBOSE=false
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-STATE_FILE="${STATE_DIR}/router-sync-state.txt"
 
 # OpenWrt session token (cached)
 OPENWRT_TOKEN=""
@@ -96,7 +83,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ---------------------------------------------------------------------------
-# Load .env if available
+# Load .env if available (before variable assignment so .env values take effect)
 # ---------------------------------------------------------------------------
 if [[ -f "${SCRIPT_DIR}/../.env" ]]; then
     set -a
@@ -104,6 +91,19 @@ if [[ -f "${SCRIPT_DIR}/../.env" ]]; then
     source "${SCRIPT_DIR}/../.env"
     set +a
 fi
+
+# Configuration (uses environment/`.env` values, with defaults as fallback)
+CROWDSEC_LAPI_URL="${CROWDSEC_LAPI_URL:-http://127.0.0.1:8080}"
+CROWDSEC_LAPI_KEY="${CROWDSEC_LAPI_KEY:-}"
+ROUTER_TYPE="${ROUTER_TYPE:-generic}"
+ROUTER_URL="${ROUTER_URL:-}"
+ROUTER_USER="${ROUTER_USER:-}"
+ROUTER_PASS="${ROUTER_PASS:-}"
+ROUTER_LIST_NAME="${ROUTER_LIST_NAME:-nib-blocklist}"
+ROUTER_VERIFY_SSL="${ROUTER_VERIFY_SSL:-false}"
+SYNC_INTERVAL="${SYNC_INTERVAL:-60}"
+STATE_DIR="${STATE_DIR:-/var/lib/nib}"
+STATE_FILE="${STATE_DIR}/router-sync-state.txt"
 
 # ---------------------------------------------------------------------------
 # Dependency check
@@ -176,13 +176,37 @@ validate_config() {
 }
 
 # ---------------------------------------------------------------------------
+# IP/CIDR validation
+# ---------------------------------------------------------------------------
+is_valid_ip_or_cidr() {
+    local value="$1"
+    # Match IPv4, IPv4/CIDR, IPv6 (simplified), IPv6/CIDR
+    if [[ "$value" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(/[0-9]+)?$ ]]; then
+        return 0
+    elif [[ "$value" =~ ^[0-9a-fA-F:]+(/[0-9]+)?$ ]]; then
+        return 0
+    fi
+    return 1
+}
+
+# ---------------------------------------------------------------------------
 # CrowdSec LAPI interaction
 # ---------------------------------------------------------------------------
 get_decisions() {
-    local curl_opts=(-sf)
+    local curl_opts=(-s --fail --show-error)
     curl_opts+=(-H "X-Api-Key: ${CROWDSEC_LAPI_KEY}")
 
-    curl "${curl_opts[@]}" "${CROWDSEC_LAPI_URL}/v1/decisions?type=ban" 2>/dev/null || echo "null"
+    local response http_code
+    # Use -w to capture the HTTP status code separately
+    response=$(curl "${curl_opts[@]}" "${CROWDSEC_LAPI_URL}/v1/decisions?type=ban" 2>/dev/null)
+    local exit_code=$?
+
+    if [[ $exit_code -ne 0 ]]; then
+        echo -e "${RED}  Error: Failed to reach CrowdSec LAPI at ${CROWDSEC_LAPI_URL}${RESET}" >&2
+        return 1
+    fi
+
+    echo "$response"
 }
 
 extract_ips() {
@@ -192,12 +216,14 @@ extract_ips() {
         return
     fi
     echo "$decisions" | python3 -c "
-import sys, json
+import sys, json, re
 data = json.load(sys.stdin)
+ip_re = re.compile(r'^[0-9a-fA-F.:]+(/[0-9]+)?$')
 if data:
     for d in data:
-        if d.get('value') and d.get('type') == 'ban':
-            print(d['value'])
+        v = d.get('value', '')
+        if v and d.get('type') == 'ban' and ip_re.match(v):
+            print(v)
 " 2>/dev/null || echo ""
 }
 
@@ -382,6 +408,12 @@ push_to_router() {
     local ip="$1"
     local action="$2"
 
+    # Validate IP before sending to any router (prevents command/JSON injection)
+    if ! is_valid_ip_or_cidr "$ip"; then
+        echo -e "${RED}  Rejecting invalid IP/CIDR: ${ip}${RESET}" >&2
+        return 1
+    fi
+
     case "$ROUTER_TYPE" in
         mikrotik)   push_mikrotik "$ip" "$action" ;;
         opnsense)   push_opnsense "$ip" "$action" ;;
@@ -401,7 +433,10 @@ push_to_router() {
 # ---------------------------------------------------------------------------
 sync_decisions() {
     local decisions
-    decisions=$(get_decisions)
+    if ! decisions=$(get_decisions); then
+        echo -e "${YELLOW}  Skipping sync: LAPI unreachable (existing blocklist preserved)${RESET}"
+        return 0
+    fi
 
     local current_ips
     current_ips=$(extract_ips "$decisions")
@@ -418,7 +453,7 @@ sync_decisions() {
 
     while IFS= read -r ip; do
         [[ -z "$ip" ]] && continue
-        if ! echo "$previous_ips" | grep -qF "$ip"; then
+        if ! echo "$previous_ips" | grep -qxF "$ip"; then
             if [[ "$DRY_RUN" == "true" ]]; then
                 echo -e "  ${RED}+ Would block${RESET} ${ip}"
                 added=$((added + 1))
@@ -434,7 +469,7 @@ sync_decisions() {
     # Find IPs to remove (in previous but not in current)
     while IFS= read -r ip; do
         [[ -z "$ip" ]] && continue
-        if [[ -n "$current_ips" ]] && ! echo "$current_ips" | grep -qF "$ip"; then
+        if [[ -n "$current_ips" ]] && ! echo "$current_ips" | grep -qxF "$ip"; then
             if [[ "$DRY_RUN" == "true" ]]; then
                 echo -e "  ${GREEN}- Would unblock${RESET} ${ip}"
                 removed=$((removed + 1))

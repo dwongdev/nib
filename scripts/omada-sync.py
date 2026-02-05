@@ -68,8 +68,9 @@ class CrowdSecClient:
             'Content-Type': 'application/json'
         })
     
-    def get_decisions(self) -> Set[str]:
-        """Fetch active ban decisions (IP addresses only)"""
+    def get_decisions(self) -> Optional[Set[str]]:
+        """Fetch active ban decisions (IP addresses only).
+        Returns None on LAPI errors to distinguish from 'no active bans' (empty set)."""
         try:
             response = self.session.get(
                 f'{self.url}/v1/decisions',
@@ -77,11 +78,11 @@ class CrowdSecClient:
                 timeout=10
             )
             response.raise_for_status()
-            
+
             decisions = response.json()
             if not decisions:
                 return set()
-            
+
             # Extract unique IPs
             ips = set()
             for decision in decisions:
@@ -89,12 +90,12 @@ class CrowdSecClient:
                 # Handle CIDR ranges - Omada IP Groups support both single IPs and ranges
                 if value:
                     ips.add(value)
-            
+
             return ips
-            
+
         except requests.exceptions.RequestException as e:
             logger.error(f"Failed to fetch CrowdSec decisions: {e}")
-            return set()
+            return None
 
 
 class OmadaClient:
@@ -509,6 +510,9 @@ def sync_once(crowdsec: CrowdSecClient, omada: OmadaClient, group_name: str, dry
     """Perform one sync cycle"""
     # Get CrowdSec decisions
     blocked_ips = crowdsec.get_decisions()
+    if blocked_ips is None:
+        logger.warning("Skipping sync: CrowdSec LAPI unreachable (existing blocklist preserved)")
+        return False
     logger.info(f"CrowdSec has {len(blocked_ips)} active bans")
     
     if dry_run:
